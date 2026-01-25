@@ -209,6 +209,40 @@ This example shows /last30days learning **AI image generation prompting patterns
 
 ---
 
+## Example: Top Claude Code Skills (Recommendations)
+
+**Query:** `/last30days top claude code skills`
+
+**Research Output:**
+> The Claude Code skills ecosystem has exploded with marketplaces, curated lists, and viral skill announcements. The Remotion video skill got 17.3K likes on X. SkillsMP emerged as a marketplace with 60-87K+ skills. Multiple GitHub repos (awesome-claude-skills, Superpowers) are actively curated.
+
+**🏆 Most mentioned skills/resources:**
+
+| Rank | Skill/Resource | Mentions | Sources | Engagement |
+|------|----------------|----------|---------|------------|
+| 1 | Remotion skill | 4x | X (@Remotion, @joshua_xu_), web | 17.3K likes, video creation |
+| 2 | SkillsMP marketplace | 5x | X (@milesdeutscher, @rexan_wong), web | 60-87K+ skills directory |
+| 3 | awesome-claude-skills (GitHub) | 4x | Web (travisvn, ComposioHQ repos) | Multiple curated lists |
+| 4 | Superpowers | 3x | Web, GitHub | 27.9K stars |
+| 5 | HeyGen avatar skill | 2x | X (@joshua_xu_), web | 736 likes, AI avatars |
+| 6 | Trail of Bits Security Skills | 2x | Web | CodeQL/Semgrep auditing |
+| 7 | Claude Command Suite | 2x | GitHub, web | 148+ commands, 54 agents |
+| 8 | MCP Builder | 2x | Web | Build MCP servers |
+| 9 | Test-Driven Development | 2x | Web, skill guides | Pre-implementation testing |
+| 10 | Systematic Debugging | 2x | Web | Root cause analysis |
+
+**Notable single mentions:** UI/UX Pro Max (16.9K stars), SuperClaude framework, Compound Engineering Plugin, docx/pdf/pptx document skills, Nano-Banana, Connect (1000+ app integrations)
+
+**Marketer skill stack** (from @vibecode_edu): Slack, Email Knowledge, Nano-Banana, Notion, Skill Creator, Twitter post, Typefully
+
+**Key insight from Reddit:** Keep CLAUDE.md short (~1K context), use Skills for "context on demand", and ensure skill descriptions contain your trigger keywords.
+
+**Research Stats:** 4 Reddit threads (238 upvotes, 156 comments) + 15 X posts (28K+ likes, 2.8K reposts) from r/ClaudeCode, r/ClaudeAI, @Remotion, @milesdeutscher
+
+This example shows /last30days as a **discovery tool** - finding the most popular resources in a rapidly evolving ecosystem by tracking what the community is actually sharing and upvoting.
+
+---
+
 ## Example: Discover Viral Trends (Dog as Human)
 
 **Query:** `/last30days using ChatGPT to make images of dogs`
