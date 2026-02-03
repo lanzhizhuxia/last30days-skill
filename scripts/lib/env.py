@@ -4,8 +4,20 @@ import os
 from pathlib import Path
 from typing import Optional, Dict, Any
 
-CONFIG_DIR = Path.home() / ".config" / "last30days"
-CONFIG_FILE = CONFIG_DIR / ".env"
+# Allow override via environment variable for testing
+# Set LAST30DAYS_CONFIG_DIR="" for clean/no-config mode
+# Set LAST30DAYS_CONFIG_DIR="/path/to/dir" for custom config location
+_config_override = os.environ.get('LAST30DAYS_CONFIG_DIR')
+if _config_override == "":
+    # Empty string = no config file (clean mode)
+    CONFIG_DIR = None
+    CONFIG_FILE = None
+elif _config_override:
+    CONFIG_DIR = Path(_config_override)
+    CONFIG_FILE = CONFIG_DIR / ".env"
+else:
+    CONFIG_DIR = Path.home() / ".config" / "last30days"
+    CONFIG_FILE = CONFIG_DIR / ".env"
 
 
 def load_env_file(path: Path) -> Dict[str, str]:
@@ -33,8 +45,8 @@ def load_env_file(path: Path) -> Dict[str, str]:
 
 def get_config() -> Dict[str, Any]:
     """Load configuration from ~/.config/last30days/.env and environment."""
-    # Load from config file first
-    file_env = load_env_file(CONFIG_FILE)
+    # Load from config file first (if configured)
+    file_env = load_env_file(CONFIG_FILE) if CONFIG_FILE else {}
 
     # Environment variables override file
     config = {
