@@ -8,26 +8,38 @@ allowed-tools: Bash, Read, Write, AskUserQuestion, WebSearch
 
 # last30days: Research Any Topic from the Last 30 Days
 
-Research ANY topic across Reddit, X, and the web. Surface what people are actually discussing, recommending, and debating right now.
+## YOUR FIRST OUTPUT — before ANY tool calls
 
-## STEP 1: Parse User Intent & Acknowledge
+Extract the TOPIC from the user's query, then output this progress block. This text MUST appear to the user BEFORE you call Bash or WebSearch:
 
-**Before running anything**, parse the user's input for:
+🔍 **{TOPIC}**
 
-1. **TOPIC**: What they want to learn about (e.g., "web app mockups", "Claude Code skills", "image generation")
-2. **TARGET TOOL** (if specified): Where they'll use the prompts (e.g., "Nano Banana Pro", "ChatGPT", "Midjourney")
-3. **QUERY TYPE**: What kind of research they want:
-   - **PROMPTING** - "X prompts", "prompting for X", "X best practices" → User wants to learn techniques and get copy-paste prompts
-   - **RECOMMENDATIONS** - "best X", "top X", "what X should I use", "recommended X" → User wants a LIST of specific things
-   - **NEWS** - "what's happening with X", "X news", "latest on X" → User wants current events/updates
-   - **GENERAL** - anything else → User wants broad understanding of the topic
+Deploying research agents:
+🟠 Reddit — scanning subreddits for upvotes and comments...
+🔵 X — reading posts for likes and reposts...
+🌐 Web — searching blogs, docs, and news...
 
-Common patterns:
-- `[topic] for [tool]` → "web mockups for Nano Banana Pro" → TOOL IS SPECIFIED
-- `[topic] prompts for [tool]` → "UI design prompts for Midjourney" → TOOL IS SPECIFIED
-- Just `[topic]` → "iOS design mockups" → TOOL NOT SPECIFIED, that's OK
-- "best [topic]" or "top [topic]" → QUERY_TYPE = RECOMMENDATIONS
-- "what are the best [topic]" → QUERY_TYPE = RECOMMENDATIONS
+**DO NOT skip this. DO NOT jump to tool calls first. Output the text above, THEN call tools.**
+
+## STEP 1: Run the Research Script
+
+After outputting the progress block above, run:
+
+```bash
+python3 ~/.claude/skills/last30days/scripts/last30days.py "$ARGUMENTS" --emit=compact 2>&1
+```
+
+## STEP 2: Parse User Intent (while script runs)
+
+While the script runs, parse the user's input for:
+
+1. **TOPIC**: What they want to learn about
+2. **TARGET TOOL** (if specified): Where they'll use the prompts (e.g., "Nano Banana Pro", "ChatGPT")
+3. **QUERY TYPE**:
+   - **PROMPTING** - "X prompts", "prompting for X", "X best practices"
+   - **RECOMMENDATIONS** - "best X", "top X", "what X should I use"
+   - **NEWS** - "what's happening with X", "X news", "latest on X"
+   - **GENERAL** - anything else
 
 **IMPORTANT: Do NOT ask about target tool before research.**
 - If tool is specified in the query, use it
@@ -37,23 +49,6 @@ Common patterns:
 - `TOPIC = [extracted topic]`
 - `TARGET_TOOL = [extracted tool, or "unknown" if not specified]`
 - `QUERY_TYPE = [RECOMMENDATIONS | NEWS | HOW-TO | GENERAL]`
-
-**Then output this progress block to the user (copy format exactly, fill in TOPIC):**
-
-```
-🔍 **{TOPIC}**
-
-Deploying research agents:
-🟠 Reddit — scanning subreddits for upvotes and comments...
-🔵 X — reading posts for likes and reposts...
-🌐 Web — searching blogs, docs, and news...
-```
-
-**Then immediately run the research script:**
-
-```bash
-python3 ~/.claude/skills/last30days/scripts/last30days.py "$ARGUMENTS" --emit=compact 2>&1
-```
 
 ---
 
