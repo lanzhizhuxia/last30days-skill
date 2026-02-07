@@ -1,4 +1,4 @@
-# /last30days
+# /last30days v2
 
 **The AI world reinvents itself every month. This Claude Code skill keeps you current.** /last30days researches your topic across Reddit, X, and the web from the last 30 days, finds what the community is actually upvoting and sharing, and writes you a prompt that works today, not six months ago. Whether it's Ralph Wiggum loops, Suno music prompts, or the latest Midjourney techniques, you'll prompt like someone who's been paying attention.
 
@@ -16,10 +16,21 @@ git clone https://github.com/mvanhorn/last30days-skill.git ~/.claude/skills/last
 mkdir -p ~/.config/last30days
 cat > ~/.config/last30days/.env << 'EOF'
 OPENAI_API_KEY=sk-...
-XAI_API_KEY=xai-...
+XAI_API_KEY=xai-...       # optional if using Bird CLI
 EOF
 chmod 600 ~/.config/last30days/.env
 ```
+
+### Optional: Bird CLI for free X search
+
+[Bird CLI](https://github.com/steipete/bird) lets you search X without an xAI API key. If installed and authenticated, /last30days uses it automatically.
+
+```bash
+npm install -g @steipete/bird
+bird login
+```
+
+Bird is free and doesn't require an xAI key. If both Bird and an xAI key are available, Bird is preferred.
 
 ## Usage
 
@@ -693,26 +704,72 @@ This example shows /last30days discovering **emerging developer workflows** - re
 
 | Flag | Description |
 |------|-------------|
-| `--quick` | Faster research, fewer sources (8-12 each) |
-| `--deep` | Comprehensive research (50-70 Reddit, 40-60 X) |
+| `--days=N` | Look back N days instead of 30 (e.g., `--days=7` for weekly roundup) |
+| `--quick` | Faster research, fewer sources (8-12 each), skips supplemental search |
+| `--deep` | Comprehensive research (50-70 Reddit, 40-60 X) with extended supplemental |
 | `--debug` | Verbose logging for troubleshooting |
 | `--sources=reddit` | Reddit only |
 | `--sources=x` | X only |
 
 ## Requirements
 
-- **OpenAI API key** - For Reddit research (uses web search)
-- **xAI API key** - For X research (optional but recommended)
+- **OpenAI API key** - For Reddit research (uses web search via Responses API)
+- **X search** (one of):
+  - **Bird CLI** (free) - `npm install -g @steipete/bird && bird login`
+  - **xAI API key** - Paid, uses Grok's live X search
 
-At least one key is required.
+At least one API key is required. Bird CLI is recommended for X search since it's free.
 
 ## How It Works
 
-The skill uses:
-- OpenAI's Responses API with web search to find Reddit discussions
-- xAI's API with live X search to find posts
-- Real Reddit thread enrichment for engagement metrics
-- Scoring algorithm that weighs recency, relevance, and engagement
+### Two-Phase Search Architecture
+
+**Phase 1: Broad discovery**
+- OpenAI Responses API with `web_search` tool scoped to reddit.com
+- Bird CLI (or xAI API) for X/Twitter search
+- WebSearch for blogs, news, docs, tutorials
+- Reddit JSON enrichment for real engagement metrics (upvotes, comments)
+- Scoring algorithm weighing recency, relevance, and engagement
+
+**Phase 2: Smart supplemental search** (new in V2)
+- Extracts entities from Phase 1 results: @handles from X posts, subreddit names from Reddit
+- Runs targeted follow-up searches: `from:@handle topic` on X, subreddit-scoped searches on Reddit
+- Uses Reddit's free `.json` search endpoint (no API key needed for supplemental)
+- Merges and deduplicates with Phase 1 results
+- Skipped on `--quick` for speed; extended on `--deep`
+
+### Model Fallback Chain
+
+Reddit search (via OpenAI) automatically falls back through available models:
+gpt-4.1 -> gpt-4o -> gpt-4o-mini
+
+If your OpenAI org doesn't have access to a model (e.g., unverified for gpt-4.1), it tries the next one.
+
+---
+
+## What's New in V2
+
+**Bird CLI integration** - Free X search without an xAI API key. Just `npm install -g @steipete/bird && bird login`. Auto-detected at runtime.
+
+**`--days=N` flag** - Configurable lookback window. `/last30days topic --days=7` for a weekly roundup, `--days=14` for two weeks.
+
+**Smart supplemental search (Phase 2)** - After the initial broad search, extracts key @handles and subreddits from results, then runs targeted follow-up searches to find content that broad keyword search misses. Example: researching "Open Claw" automatically discovers @openclaw, @steipete and drills into their posts.
+
+**Model fallback chain** - If your OpenAI org can't access gpt-4.1, automatically falls back to gpt-4o, then gpt-4o-mini. No config needed.
+
+**Context-aware invitations** - After research, the skill generates specific follow-up suggestions based on what it actually learned (not generic templates). For example, after researching Nano Banana Pro it might suggest "Photorealistic product shots with natural lighting" rather than a generic "describe what you want."
+
+**Citation priority** - Cites @handles from X and r/subreddits over web sources, because the skill's value is surfacing what *people* are saying, not what journalists wrote.
+
+**Reddit JSON enrichment** - Fetches real upvote and comment counts from Reddit's free API for every thread, giving you actual engagement signals.
+
+**Marketplace plugin support** - Ships with `.claude-plugin/plugin.json` for Claude Code marketplace compatibility.
+
+**Windows Unicode fix** - Handles Unicode output correctly on Windows terminals. (Thanks [@JosephOIbrahim](https://github.com/JosephOIbrahim))
+
+**Model fallback for unverified orgs** - If your OpenAI org doesn't have access to newer models, gracefully falls back. (Thanks [@levineam](https://github.com/levineam))
+
+**`--days=N` configurable lookback** - Community-contributed flag for flexible time windows. (Thanks [@jonthebeef](https://github.com/jonthebeef))
 
 ---
 

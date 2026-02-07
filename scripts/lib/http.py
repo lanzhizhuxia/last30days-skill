@@ -20,7 +20,7 @@ def log(msg: str):
         sys.stderr.flush()
 MAX_RETRIES = 3
 RETRY_DELAY = 1.0
-USER_AGENT = "last30days-skill/1.0 (Claude Code Skill)"
+USER_AGENT = "last30days-skill/2.0 (Claude Code Skill)"
 
 
 class HTTPError(Exception):
