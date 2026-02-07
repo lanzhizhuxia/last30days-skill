@@ -265,25 +265,25 @@ NEVER use plain text dashes (-) or pipe (|). ALWAYS use ├─ └─ │ and th
 **If QUERY_TYPE = PROMPTING:**
 ```
 ---
-Share your vision for what you want to create and I'll write a thoughtful prompt you can copy-paste directly into {TARGET_TOOL}.
+I'm now an expert on {TOPIC} for {TARGET_TOOL}. Share your vision for what you want to create and I'll write a thoughtful prompt you can copy-paste directly into {TARGET_TOOL}.
 ```
 
 **If QUERY_TYPE = RECOMMENDATIONS:**
 ```
 ---
-Want me to go deeper on any of these? I can compare options, explain trade-offs, or write a prompt to try one out.
+I'm now an expert on {TOPIC}. Want me to go deeper on any of these? I can compare options, explain trade-offs, or help you get started with one.
 ```
 
 **If QUERY_TYPE = NEWS:**
 ```
 ---
-Ask me anything about this topic — I can explain context, analyze implications, or go deeper on any storyline above.
+I'm now an expert on {TOPIC}. Ask me anything — I can explain context, analyze implications, or go deeper on any storyline above.
 ```
 
 **If QUERY_TYPE = GENERAL:**
 ```
 ---
-I'm now an expert on {TOPIC}. Ask me anything, or tell me what you want to create and I'll write a prompt for it.
+I'm now an expert on {TOPIC}. Ask me anything, or describe what you're working on and I'll help.
 ```
 
 ---
