@@ -4,7 +4,7 @@
 
 **New in V2.1  - three headline features:**
 
-1. **Open-class skill with watchlists.** Add any topic to a watchlist  - your competitors, your partners, your board members, an emerging technology  - and /last30days automatically re-researches it on a schedule. Set it once, get a briefing every 30 days (or every week). This is the skill that runs while you sleep.
+1. **Open-class skill with watchlists.** Add any topic to a watchlist  - your competitors, your partners, your board members, an emerging technology  - and /last30days re-researches it on demand or via cron. Designed for always-on environments like [Open Claw](https://github.com/AgenTick/open-claw) where a bot can run research on a schedule and accumulate findings over time.
 2. **YouTube transcripts as a 4th source.** When yt-dlp is installed, /last30days automatically searches YouTube, grabs view counts, and extracts auto-generated transcripts from the top videos. A 20-minute review contains 10x the signal of a single post - now the skill reads it. Inspired by [@steipete](https://x.com/steipete)'s yt-dlp + [summarize](https://github.com/steipete/summarize) toolchain.
 3. **Works in OpenAI Codex CLI.** Same skill, same engine. Install to `~/.agents/skills/last30days` and invoke with `$last30days`. Claude Code and Codex users get the same research.
 
@@ -64,29 +64,34 @@ git clone https://github.com/mvanhorn/last30days-skill.git ~/.agents/skills/last
 
 Same SKILL.md, same Python engine, same scripts. The `agents/openai.yaml` provides Codex-specific discovery metadata. Invoke with `$last30days` or through the `/skills` menu.
 
-### Open Variant (Watchlist + Briefings)  - Recommended
+### Open Variant (Watchlist + Briefings)  - For Always-On Bots
 
-The killer use case: **set up research that runs itself.** Add your competitors, partners, board members, or any topic to a watchlist. /last30days re-researches them on a daily or weekly schedule and accumulates findings in a local database. Ask for a briefing anytime.
+**Designed for [Open Claw](https://github.com/AgenTick/open-claw) and similar always-on AI environments.** Add your competitors, partners, board members, or any topic to a watchlist. When paired with a cron job or always-on bot, /last30days re-researches them on a schedule and accumulates findings in a local SQLite database. Ask for a briefing anytime.
+
+**Important:** The watchlist stores schedules as metadata, but nothing triggers runs automatically. You need an external scheduler (cron, launchd, or an always-on bot like Open Claw) to call `watchlist.py run-all` on a timer. In plain Claude Code, you can run `watch run-one` and `watch run-all` manually, but there's no background scheduling.
 
 ```bash
 # Enable the open variant
 cp variants/open/SKILL.md ~/.claude/skills/last30days/SKILL.md
 
 # Add topics to your watchlist
-/last30days watch add "Competitor X product launches"
-/last30days watch add "Board member Jane Doe" --weekly
-/last30days watch add "AI video generation tools"
+last30 watch my biggest competitor every week
+last30 watch AI video generation tools
+last30 tell me once a month about what my board members are up to
+
+# Run research manually (or let your bot's cron handle it)
+last30 run all my watched topics
 
 # Get your briefing
-/last30days briefing
+last30 give me my briefing
 
 # Search accumulated knowledge
-/last30days history "what did Competitor X ship?"
+last30 what have you found about AI video?
 ```
 
 The open variant adds four modes on top of one-shot research:
 
-- **Watchlist**  - Track topics over time with `watch add "topic"`, run on a schedule
+- **Watchlist**  - Track topics with `watch add "topic"`, run manually or via cron
 - **Briefings**  - Daily/weekly digests synthesized from accumulated findings
 - **History**  - Query and search your research database with full-text search
 - **Native web search**  - Built-in web search backends (Parallel AI, Brave, OpenRouter) run alongside Reddit/X/YouTube
@@ -898,9 +903,9 @@ V2 finds significantly more content than V1. Two major improvements:
 
 ### Open-class skill with watchlists (v2.1)
 
-**The biggest feature in v2.1 isn't a new source  - it's what happens when you stop thinking of /last30days as a one-shot tool.** The open variant adds a watchlist, briefings, and history. Add `"Competitor X"` to your watchlist, set it to weekly, and every Monday morning you have a research briefing waiting  - what they shipped, what people said about it, what Reddit and X are discussing. Do the same for your partners, your board members, an emerging technology you're tracking. The research accumulates in a local SQLite database, and you can query it anytime with natural language.
+**The biggest feature in v2.1 isn't a new source  - it's what happens when you pair /last30days with an always-on bot.** The open variant adds a watchlist, briefings, and history. Add `"Competitor X"` to your watchlist, set it to weekly, and when your bot's cron job fires every Monday, you get a research briefing  - what they shipped, what people said about it, what Reddit and X are discussing. The research accumulates in a local SQLite database, and you can query it anytime with natural language.
 
-This is the use case that changes how you work: **research that runs while you sleep.**
+**Designed for [Open Claw](https://github.com/AgenTick/open-claw) and similar always-on environments.** The watchlist stores schedules as metadata  - you need cron, launchd, or a persistent bot to actually trigger runs. In Claude Code you can still use `run-one` and `run-all` manually.
 
 ### YouTube search with transcripts (v2.1)
 
@@ -940,6 +945,34 @@ Thanks to the contributors who helped shape V2:
 
 ---
 
+## Security & Privacy
+
+### Data that leaves your machine
+
+| Destination | Data Sent | API Key Required |
+|------------|-----------|-----------------|
+| `api.openai.com` | Search query (topic string) | OPENAI_API_KEY |
+| `reddit.com` | Thread URLs for enrichment | None (public JSON) |
+| Twitter GraphQL / `api.x.ai` | Search query | Browser cookies or XAI_API_KEY |
+| `youtube.com` (via yt-dlp) | Search query | None (public search) |
+| `api.search.brave.com` | Search query (optional) | BRAVE_API_KEY |
+| `api.parallel.ai` | Search query (optional) | PARALLEL_API_KEY |
+| `openrouter.ai` | Search query (optional) | OPENROUTER_API_KEY |
+
+Your research topic is included in all outbound API requests. If you research sensitive topics, be aware that query strings are transmitted to the API providers listed above.
+
+### Data stored locally
+
+- API keys: `~/.config/last30days/.env` (chmod 600 recommended)
+- Watchlist database: `~/.local/share/last30days/research.db` (SQLite)
+- Briefings: `~/.local/share/last30days/briefs/`
+
+### API key isolation
+
+Each API key is transmitted only to its respective endpoint. Your OpenAI key is never sent to xAI, Brave, or any other provider. Browser cookies for X are read locally and used only for Twitter GraphQL requests.
+
+---
+
 *30 days of research. 30 seconds of work. Four sources. Zero stale prompts.*
 
-*Set it once. Get briefings forever. Reddit. X. YouTube. Web.  - All synthesized into expert answers and copy-paste prompts.*
+*Pair with [Open Claw](https://github.com/AgenTick/open-claw) for automated watchlists and briefings. Reddit. X. YouTube. Web.  - All synthesized into expert answers and copy-paste prompts.*
