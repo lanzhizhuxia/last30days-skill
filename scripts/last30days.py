@@ -38,9 +38,9 @@ _child_pids: set = set()
 _child_pids_lock = threading.Lock()
 
 TIMEOUT_PROFILES = {
-    "quick":   {"global": 90,  "future": 30, "youtube_future": 60,  "http": 15, "enrich_per": 8,  "enrich_total": 30, "enrich_max_items": 10},
-    "default": {"global": 180, "future": 60, "youtube_future": 90,  "http": 30, "enrich_per": 15, "enrich_total": 45, "enrich_max_items": 15},
-    "deep":    {"global": 300, "future": 90, "youtube_future": 120, "http": 30, "enrich_per": 15, "enrich_total": 60, "enrich_max_items": 25},
+    "quick":   {"global": 90,  "future": 30, "reddit_future": 60,  "youtube_future": 60,  "http": 15, "enrich_per": 8,  "enrich_total": 30, "enrich_max_items": 10},
+    "default": {"global": 180, "future": 60, "reddit_future": 90,  "youtube_future": 90,  "http": 30, "enrich_per": 15, "enrich_total": 45, "enrich_max_items": 15},
+    "deep":    {"global": 300, "future": 90, "reddit_future": 120, "youtube_future": 120, "http": 30, "enrich_per": 15, "enrich_total": 60, "enrich_max_items": 25},
 }
 
 
@@ -612,12 +612,13 @@ def run_research(
 
         # Collect results (with timeouts to prevent indefinite blocking)
         if reddit_future:
+            reddit_timeout = timeouts.get("reddit_future", future_timeout)
             try:
-                reddit_items, raw_openai, reddit_error = reddit_future.result(timeout=future_timeout)
+                reddit_items, raw_openai, reddit_error = reddit_future.result(timeout=reddit_timeout)
                 if reddit_error and progress:
                     progress.show_error(f"Reddit error: {reddit_error}")
             except TimeoutError:
-                reddit_error = f"Reddit search timed out after {future_timeout}s"
+                reddit_error = f"Reddit search timed out after {reddit_timeout}s"
                 if progress:
                     progress.show_error(reddit_error)
             except Exception as e:
