@@ -124,11 +124,13 @@ def post(url: str, json_data: Dict[str, Any], headers: Optional[Dict[str, str]] 
     return request("POST", url, headers=headers, json_data=json_data, **kwargs)
 
 
-def get_reddit_json(path: str) -> Dict[str, Any]:
+def get_reddit_json(path: str, timeout: int = DEFAULT_TIMEOUT, retries: int = MAX_RETRIES) -> Dict[str, Any]:
     """Fetch Reddit thread JSON.
 
     Args:
         path: Reddit path (e.g., /r/subreddit/comments/id/title)
+        timeout: HTTP timeout per attempt in seconds
+        retries: Number of retries on failure
 
     Returns:
         Parsed JSON response
@@ -149,4 +151,4 @@ def get_reddit_json(path: str) -> Dict[str, Any]:
         "Accept": "application/json",
     }
 
-    return get(url, headers=headers)
+    return get(url, headers=headers, timeout=timeout, retries=retries)

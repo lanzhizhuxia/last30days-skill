@@ -235,7 +235,7 @@ def search_subreddits(
                 "Accept": "application/json",
             }
 
-            data = http.get(full_url, headers=headers, timeout=15)
+            data = http.get(full_url, headers=headers, timeout=15, retries=1)
 
             # Reddit search returns {"data": {"children": [...]}}
             children = data.get("data", {}).get("children", [])
@@ -267,6 +267,9 @@ def search_subreddits(
 
         except http.HTTPError as e:
             _log_info(f"Subreddit search failed for r/{sub}: {e}")
+            if e.status_code == 429:
+                _log_info("Reddit rate-limited (429) — skipping remaining subreddits")
+                break
         except Exception as e:
             _log_info(f"Subreddit search error for r/{sub}: {e}")
 

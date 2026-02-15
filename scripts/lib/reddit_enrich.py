@@ -25,15 +25,30 @@ def extract_reddit_path(url: str) -> Optional[str]:
         return None
 
 
-def fetch_thread_data(url: str, mock_data: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+class RedditRateLimitError(Exception):
+    """Raised when Reddit returns HTTP 429 (rate limited)."""
+    pass
+
+
+def fetch_thread_data(
+    url: str,
+    mock_data: Optional[Dict] = None,
+    timeout: int = 30,
+    retries: int = 3,
+) -> Optional[Dict[str, Any]]:
     """Fetch Reddit thread JSON data.
 
     Args:
         url: Reddit thread URL
         mock_data: Mock data for testing
+        timeout: HTTP timeout per attempt in seconds
+        retries: Number of retries on failure
 
     Returns:
         Thread data dict or None on failure
+
+    Raises:
+        RedditRateLimitError: When Reddit returns 429 (caller should bail)
     """
     if mock_data is not None:
         return mock_data
@@ -43,9 +58,11 @@ def fetch_thread_data(url: str, mock_data: Optional[Dict] = None) -> Optional[Di
         return None
 
     try:
-        data = http.get_reddit_json(path)
+        data = http.get_reddit_json(path, timeout=timeout, retries=retries)
         return data
-    except http.HTTPError:
+    except http.HTTPError as e:
+        if e.status_code == 429:
+            raise RedditRateLimitError(f"Reddit rate limited (429) fetching {url}") from e
         return None
 
 
@@ -178,20 +195,27 @@ def extract_comment_insights(comments: List[Dict], limit: int = 7) -> List[str]:
 def enrich_reddit_item(
     item: Dict[str, Any],
     mock_thread_data: Optional[Dict] = None,
+    timeout: int = 10,
+    retries: int = 1,
 ) -> Dict[str, Any]:
     """Enrich a Reddit item with real engagement data.
 
     Args:
         item: Reddit item dict
         mock_thread_data: Mock data for testing
+        timeout: HTTP timeout per attempt (default 10s for enrichment)
+        retries: Number of retries (default 1 — fail fast for enrichment)
 
     Returns:
         Enriched item dict
+
+    Raises:
+        RedditRateLimitError: Propagated so caller can bail on remaining items
     """
     url = item.get("url", "")
 
-    # Fetch thread data
-    thread_data = fetch_thread_data(url, mock_thread_data)
+    # Fetch thread data (RedditRateLimitError propagates to caller)
+    thread_data = fetch_thread_data(url, mock_thread_data, timeout=timeout, retries=retries)
     if not thread_data:
         return item
 

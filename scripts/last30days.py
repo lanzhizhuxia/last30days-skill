@@ -38,9 +38,9 @@ _child_pids: set = set()
 _child_pids_lock = threading.Lock()
 
 TIMEOUT_PROFILES = {
-    "quick":   {"global": 90,  "future": 30, "http": 15, "enrich_per": 8,  "enrich_total": 30, "enrich_max_items": 10},
-    "default": {"global": 180, "future": 60, "http": 30, "enrich_per": 15, "enrich_total": 45, "enrich_max_items": 15},
-    "deep":    {"global": 300, "future": 90, "http": 30, "enrich_per": 15, "enrich_total": 60, "enrich_max_items": 25},
+    "quick":   {"global": 90,  "future": 30, "youtube_future": 60,  "http": 15, "enrich_per": 8,  "enrich_total": 30, "enrich_max_items": 10},
+    "default": {"global": 180, "future": 60, "youtube_future": 90,  "http": 30, "enrich_per": 15, "enrich_total": 45, "enrich_max_items": 15},
+    "deep":    {"global": 300, "future": 90, "youtube_future": 120, "http": 30, "enrich_per": 15, "enrich_total": 60, "enrich_max_items": 25},
 }
 
 
@@ -364,6 +364,7 @@ def _run_supplemental(
     depth: str,
     x_source: str,
     progress: ui.ProgressDisplay = None,
+    skip_reddit: bool = False,
 ) -> tuple:
     """Run Phase 2 supplemental searches based on entities from Phase 1.
 
@@ -379,6 +380,7 @@ def _run_supplemental(
         depth: Research depth
         x_source: 'bird' or 'xai'
         progress: Optional progress display
+        skip_reddit: If True, skip Reddit supplemental (e.g. rate-limited)
 
     Returns:
         Tuple of (supplemental_reddit, supplemental_x)
@@ -401,7 +403,7 @@ def _run_supplemental(
     )
 
     has_handles = entities["x_handles"] and x_source == "bird"
-    has_subs = entities["reddit_subreddits"]
+    has_subs = entities["reddit_subreddits"] and not skip_reddit
 
     if not has_handles and not has_subs:
         return [], []
@@ -642,12 +644,13 @@ def run_research(
                 progress.end_x(len(x_items))
 
         if youtube_future:
+            yt_timeout = timeouts.get("youtube_future", future_timeout)
             try:
-                youtube_items, youtube_error = youtube_future.result(timeout=future_timeout)
+                youtube_items, youtube_error = youtube_future.result(timeout=yt_timeout)
                 if youtube_error and progress:
                     progress.show_error(f"YouTube error: {youtube_error}")
             except TimeoutError:
-                youtube_error = f"YouTube search timed out after {future_timeout}s"
+                youtube_error = f"YouTube search timed out after {yt_timeout}s"
                 if progress:
                     progress.show_error(youtube_error)
             except Exception as e:
@@ -677,6 +680,7 @@ def run_research(
     enrich_max = timeouts["enrich_max_items"]
     enrich_total_timeout = timeouts["enrich_total"]
     items_to_enrich = reddit_items[:enrich_max]
+    rate_limited = False  # Set True if Reddit returns 429 during enrichment
 
     if items_to_enrich:
         if progress:
@@ -696,7 +700,9 @@ def run_research(
                 raw_reddit_enriched.append(reddit_items[i])
         else:
             # Parallel enrichment with bounded concurrency and total timeout
+            # Uses short HTTP timeout (10s) and 1 retry to fail fast on 429
             completed_count = 0
+            rate_limited = False
             with ThreadPoolExecutor(max_workers=5) as enrich_pool:
                 futures = {
                     enrich_pool.submit(reddit_enrich.enrich_reddit_item, item): i
@@ -710,6 +716,16 @@ def run_research(
                             progress.update_reddit_enrich(completed_count, len(items_to_enrich))
                         try:
                             reddit_items[idx] = future.result(timeout=timeouts["enrich_per"])
+                        except reddit_enrich.RedditRateLimitError:
+                            rate_limited = True
+                            if progress:
+                                progress.show_error(
+                                    "Reddit rate-limited (429) — skipping remaining enrichment"
+                                )
+                            # Cancel remaining futures and bail
+                            for f in futures:
+                                f.cancel()
+                            break
                         except Exception as e:
                             if progress:
                                 progress.show_error(
@@ -731,11 +747,12 @@ def run_research(
             progress.end_reddit_enrich()
 
     # Phase 2: Supplemental search based on entities from Phase 1
-    # Skip on --quick (speed matters) and mock mode
+    # Skip on --quick (speed matters), mock mode, or if Reddit is rate-limiting
     if depth != "quick" and not mock and (reddit_items or x_items):
         sup_reddit, sup_x = _run_supplemental(
             topic, reddit_items, x_items,
             from_date, to_date, depth, x_source, progress,
+            skip_reddit=rate_limited,
         )
         if sup_reddit:
             reddit_items.extend(sup_reddit)
