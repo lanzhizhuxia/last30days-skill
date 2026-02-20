@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional
 from . import http
 
 # Fallback models when the selected model isn't accessible (e.g., org not verified for GPT-5)
-MODEL_FALLBACK_ORDER = ["gpt-4.1", "gpt-4o", "gpt-4o-mini"]
+# Note: gpt-4o-mini does NOT support web_search with filters param, so exclude it
+MODEL_FALLBACK_ORDER = ["gpt-4.1", "gpt-4o"]
 
 
 def _log_error(msg: str):
@@ -187,6 +188,9 @@ def search_reddit(
             last_error = e
             if _is_model_access_error(e):
                 _log_info(f"Model {current_model} not accessible, trying fallback...")
+                continue
+            if e.status_code == 429:
+                _log_info(f"Rate limited on {current_model}, trying fallback model...")
                 continue
             # Non-access error, don't retry with different model
             raise

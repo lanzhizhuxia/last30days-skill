@@ -18,8 +18,8 @@ def log(msg: str):
     if DEBUG:
         sys.stderr.write(f"[DEBUG] {msg}\n")
         sys.stderr.flush()
-MAX_RETRIES = 3
-RETRY_DELAY = 1.0
+MAX_RETRIES = 5
+RETRY_DELAY = 2.0
 USER_AGENT = "last30days-skill/2.1 (Assistant Skill)"
 
 
@@ -92,7 +92,20 @@ def request(
                 raise last_error
 
             if attempt < retries - 1:
-                time.sleep(RETRY_DELAY * (attempt + 1))
+                if e.code == 429:
+                    # Respect Retry-After header, fall back to exponential backoff
+                    retry_after = e.headers.get("Retry-After") if hasattr(e, 'headers') else None
+                    if retry_after:
+                        try:
+                            delay = float(retry_after)
+                        except ValueError:
+                            delay = RETRY_DELAY * (2 ** attempt) + 1
+                    else:
+                        delay = RETRY_DELAY * (2 ** attempt) + 1  # 2s, 5s, 9s...
+                    log(f"Rate limited (429). Waiting {delay:.1f}s before retry {attempt + 2}/{retries}")
+                else:
+                    delay = RETRY_DELAY * (2 ** attempt)
+                time.sleep(delay)
         except urllib.error.URLError as e:
             log(f"URL Error: {e.reason}")
             last_error = HTTPError(f"URL Error: {e.reason}")
