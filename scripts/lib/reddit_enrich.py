@@ -61,8 +61,8 @@ def fetch_thread_data(
         data = http.get_reddit_json(path, timeout=timeout, retries=retries)
         return data
     except http.HTTPError as e:
-        if e.status_code == 429:
-            raise RedditRateLimitError(f"Reddit rate limited (429) fetching {url}") from e
+        if e.status_code in (429, 403):
+            raise RedditRateLimitError(f"Reddit blocked ({e.status_code}) fetching {url}") from e
         return None
 
 
@@ -196,7 +196,7 @@ def enrich_reddit_item(
     item: Dict[str, Any],
     mock_thread_data: Optional[Dict] = None,
     timeout: int = 10,
-    retries: int = 1,
+    retries: int = 2,
 ) -> Dict[str, Any]:
     """Enrich a Reddit item with real engagement data.
 

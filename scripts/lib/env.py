@@ -60,6 +60,10 @@ def get_config() -> Dict[str, Any]:
         ('OPENAI_MODEL_PIN', None),
         ('XAI_MODEL_POLICY', 'latest'),
         ('XAI_MODEL_PIN', None),
+        ('REDDIT_BACKEND', 'auto'),      # auto / openai / brave
+        ('OPENAI_API_BASE', None),       # For M2 Codex API proxy
+        ('AUTH_TOKEN', None),             # X search cookie auth fallback
+        ('CT0', None),                   # X search cookie auth fallback
     ]
 
     config = {}
@@ -82,10 +86,12 @@ def get_available_sources(config: Dict[str, Any]) -> str:
     has_openai = bool(config.get('OPENAI_API_KEY'))
     has_xai = bool(config.get('XAI_API_KEY'))
     has_web = has_web_search_keys(config)
+    # Brave Reddit backend counts as Reddit availability
+    has_reddit = has_openai or get_reddit_backend(config) == 'brave'
 
-    if has_openai and has_xai:
+    if has_reddit and has_xai:
         return 'all' if has_web else 'both'
-    elif has_openai:
+    elif has_reddit:
         return 'reddit-web' if has_web else 'reddit'
     elif has_xai:
         return 'x-web' if has_web else 'x'
@@ -124,21 +130,21 @@ def get_missing_keys(config: Dict[str, Any]) -> str:
     has_openai = bool(config.get('OPENAI_API_KEY'))
     has_xai = bool(config.get('XAI_API_KEY'))
     has_web = has_web_search_keys(config)
-
-    # Check if Bird provides X access (import here to avoid circular dependency)
     from . import bird_x
     has_bird = bird_x.is_bird_installed() and bird_x.is_bird_authenticated()
-
     has_x = has_xai or has_bird
 
-    if has_openai and has_x and has_web:
+    # Brave Reddit backend counts as Reddit availability
+    has_reddit = has_openai or get_reddit_backend(config) == 'brave'
+
+    if has_reddit and has_x and has_web:
         return 'none'
-    elif has_openai and has_x:
+    elif has_reddit and has_x:
         return 'web'  # Missing web search keys
-    elif has_openai:
+    elif has_reddit:
         return 'x'  # Missing X source (and possibly web)
     elif has_x:
-        return 'reddit'  # Missing OpenAI key (and possibly web)
+        return 'reddit'  # Missing OpenAI key and no Brave Reddit
     else:
         return 'all'  # Missing everything
 
@@ -274,3 +280,29 @@ def get_x_source_status(config: Dict[str, Any]) -> Dict[str, Any]:
         "xai_available": xai_available,
         "can_install_bird": bird_status["can_install"],
     }
+
+
+def get_reddit_backend(config: Dict[str, Any]) -> str:
+    """Determine the Reddit search backend to use.
+
+    Args:
+        config: Configuration dict from get_config()
+
+    Returns:
+        'brave', 'openai', or 'none'
+    """
+    backend = config.get('REDDIT_BACKEND', 'auto')
+
+    if backend == 'brave':
+        return 'brave' if config.get('BRAVE_API_KEY') else 'none'
+    elif backend == 'openai':
+        return 'openai' if config.get('OPENAI_API_KEY') else 'none'
+    elif backend == 'auto':
+        # Auto-detect: prefer brave if BRAVE_API_KEY exists
+        if config.get('BRAVE_API_KEY'):
+            return 'brave'
+        elif config.get('OPENAI_API_KEY'):
+            return 'openai'
+        else:
+            return 'none'
+    return 'none'

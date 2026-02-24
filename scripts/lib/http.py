@@ -20,7 +20,7 @@ def log(msg: str):
         sys.stderr.flush()
 MAX_RETRIES = 5
 RETRY_DELAY = 2.0
-USER_AGENT = "last30days-skill/2.1 (Assistant Skill)"
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
 
 class HTTPError(Exception):
@@ -87,12 +87,12 @@ def request(
                 log(f"Error body: {body[:500]}")
             last_error = HTTPError(f"HTTP {e.code}: {e.reason}", e.code, body)
 
-            # Don't retry client errors (4xx) except rate limits
-            if 400 <= e.code < 500 and e.code != 429:
+            # Don't retry client errors (4xx) except rate limits and Reddit blocks
+            if 400 <= e.code < 500 and e.code not in (429, 403):
                 raise last_error
 
             if attempt < retries - 1:
-                if e.code == 429:
+                if e.code in (429, 403):
                     # Respect Retry-After header, fall back to exponential backoff
                     retry_after = e.headers.get("Retry-After") if hasattr(e, 'headers') else None
                     if retry_after:
@@ -102,7 +102,7 @@ def request(
                             delay = RETRY_DELAY * (2 ** attempt) + 1
                     else:
                         delay = RETRY_DELAY * (2 ** attempt) + 1  # 2s, 5s, 9s...
-                    log(f"Rate limited (429). Waiting {delay:.1f}s before retry {attempt + 2}/{retries}")
+                    log(f"Rate limited/blocked ({e.code}). Waiting {delay:.1f}s before retry {attempt + 2}/{retries}")
                 else:
                     delay = RETRY_DELAY * (2 ** attempt)
                 time.sleep(delay)
@@ -139,29 +139,24 @@ def post(url: str, json_data: Dict[str, Any], headers: Optional[Dict[str, str]] 
 
 def get_reddit_json(path: str, timeout: int = DEFAULT_TIMEOUT, retries: int = MAX_RETRIES) -> Dict[str, Any]:
     """Fetch Reddit thread JSON.
-
     Args:
         path: Reddit path (e.g., /r/subreddit/comments/id/title)
         timeout: HTTP timeout per attempt in seconds
         retries: Number of retries on failure
-
-    Returns:
         Parsed JSON response
     """
+    # Rate-limit: space out Reddit requests to avoid 403 blocks
+    time.sleep(1.0)
     # Ensure path starts with /
     if not path.startswith('/'):
         path = '/' + path
-
-    # Remove trailing slash and add .json
     path = path.rstrip('/')
     if not path.endswith('.json'):
         path = path + '.json'
-
     url = f"https://www.reddit.com{path}?raw_json=1"
-
     headers = {
         "User-Agent": USER_AGENT,
-        "Accept": "application/json",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
     }
-
     return get(url, headers=headers, timeout=timeout, retries=retries)

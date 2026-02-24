@@ -133,17 +133,37 @@ def _search_reddit(
     depth: str,
     mock: bool,
 ) -> tuple:
-    """Search Reddit via OpenAI (runs in thread).
-
+    """Search Reddit via OpenAI or Brave (runs in thread).
     Returns:
         Tuple of (reddit_items, raw_openai, error)
     """
     raw_openai = None
     reddit_error = None
-
+    # Determine backend
+    reddit_backend = env.get_reddit_backend(config)
     if mock:
         raw_openai = load_fixture("openai_sample.json")
-    else:
+        reddit_items = openai_reddit.parse_reddit_response(raw_openai or {})
+        return reddit_items, raw_openai, reddit_error
+
+    # Brave backend
+    if reddit_backend == 'brave':
+        try:
+            from lib import brave_reddit
+            reddit_items = brave_reddit.search_reddit(
+                config["BRAVE_API_KEY"],
+                topic,
+                from_date,
+                to_date,
+                depth=depth,
+            )
+        except Exception as e:
+            reddit_items = []
+            reddit_error = f"{type(e).__name__}: {e}"
+        return reddit_items, None, reddit_error
+
+    # OpenAI backend (original behavior)
+    elif reddit_backend == 'openai':
         try:
             raw_openai = openai_reddit.search_reddit(
                 config["OPENAI_API_KEY"],
@@ -160,50 +180,54 @@ def _search_reddit(
             raw_openai = {"error": str(e)}
             reddit_error = f"{type(e).__name__}: {e}"
 
-    # Parse response
-    reddit_items = openai_reddit.parse_reddit_response(raw_openai or {})
+        # Parse response
+        reddit_items = openai_reddit.parse_reddit_response(raw_openai or {})
 
-    # Quick retry with simpler query if few results
-    if len(reddit_items) < 5 and not mock and not reddit_error:
-        core = openai_reddit._extract_core_subject(topic)
-        if core.lower() != topic.lower():
+        # Quick retry with simpler query if few results
+        if len(reddit_items) < 5 and not reddit_error:
+            core = openai_reddit._extract_core_subject(topic)
+            if core.lower() != topic.lower():
+                try:
+                    retry_raw = openai_reddit.search_reddit(
+                        config["OPENAI_API_KEY"],
+                        selected_models["openai"],
+                        core,
+                        from_date, to_date,
+                        depth=depth,
+                    )
+                    retry_items = openai_reddit.parse_reddit_response(retry_raw)
+                    # Add items not already found (by URL)
+                    existing_urls = {item.get("url") for item in reddit_items}
+                    for item in retry_items:
+                        if item.get("url") not in existing_urls:
+                            reddit_items.append(item)
+                except Exception:
+                    pass
+
+        # Subreddit-targeted fallback if still < 3 results
+        if len(reddit_items) < 3 and not reddit_error:
+            sub_query = openai_reddit._build_subreddit_query(topic)
             try:
-                retry_raw = openai_reddit.search_reddit(
+                sub_raw = openai_reddit.search_reddit(
                     config["OPENAI_API_KEY"],
                     selected_models["openai"],
-                    core,
+                    sub_query,
                     from_date, to_date,
                     depth=depth,
                 )
-                retry_items = openai_reddit.parse_reddit_response(retry_raw)
-                # Add items not already found (by URL)
+                sub_items = openai_reddit.parse_reddit_response(sub_raw)
                 existing_urls = {item.get("url") for item in reddit_items}
-                for item in retry_items:
+                for item in sub_items:
                     if item.get("url") not in existing_urls:
                         reddit_items.append(item)
             except Exception:
                 pass
 
-    # Subreddit-targeted fallback if still < 3 results
-    if len(reddit_items) < 3 and not mock and not reddit_error:
-        sub_query = openai_reddit._build_subreddit_query(topic)
-        try:
-            sub_raw = openai_reddit.search_reddit(
-                config["OPENAI_API_KEY"],
-                selected_models["openai"],
-                sub_query,
-                from_date, to_date,
-                depth=depth,
-            )
-            sub_items = openai_reddit.parse_reddit_response(sub_raw)
-            existing_urls = {item.get("url") for item in reddit_items}
-            for item in sub_items:
-                if item.get("url") not in existing_urls:
-                    reddit_items.append(item)
-        except Exception:
-            pass
+        return reddit_items, raw_openai, reddit_error
 
-    return reddit_items, raw_openai, reddit_error
+    # No backend available
+    else:
+        return [], None, "No Reddit backend available (need BRAVE_API_KEY or OPENAI_API_KEY)"
 
 
 def _search_x(
@@ -704,7 +728,7 @@ def run_research(
             # Uses short HTTP timeout (10s) and 1 retry to fail fast on 429
             completed_count = 0
             rate_limited = False
-            with ThreadPoolExecutor(max_workers=5) as enrich_pool:
+            with ThreadPoolExecutor(max_workers=1) as enrich_pool:
                 futures = {
                     enrich_pool.submit(reddit_enrich.enrich_reddit_item, item): i
                     for i, item in enumerate(items_to_enrich)
@@ -860,6 +884,15 @@ def main():
     # Load config
     config = env.get_config()
 
+
+    # Inject cookie auth vars into os.environ for bird-search subprocess
+    # bird-search reads AUTH_TOKEN/CT0 from env vars, but env.py loads them
+    # into config dict only — need to bridge them to os.environ
+    for _cookie_key in ('AUTH_TOKEN', 'CT0'):
+        _val = config.get(_cookie_key)
+        if _val and not os.environ.get(_cookie_key):
+            os.environ[_cookie_key] = _val
+
     # Auto-detect Bird (no prompts - just use it if available)
     x_source_status = env.get_x_source_status(config)
     x_source = x_source_status["source"]  # 'bird', 'xai', or None
@@ -873,6 +906,7 @@ def main():
         diag = {
             "openai": bool(config.get("OPENAI_API_KEY")),
             "xai": bool(config.get("XAI_API_KEY")),
+            "reddit_backend": env.get_reddit_backend(config),
             "x_source": x_source_status["source"],
             "bird_installed": x_source_status["bird_installed"],
             "bird_authenticated": x_source_status["bird_authenticated"],
@@ -916,8 +950,10 @@ def main():
     if x_source == 'bird':
         if available == 'reddit':
             available = 'both'  # Now have both Reddit + X (via Bird)
+        elif available == 'reddit-web':
+            available = 'all'  # Reddit + X (Bird) + Web
         elif available == 'web':
-            available = 'x'  # Now have X via Bird
+            available = 'x-web'  # X (Bird) + Web
 
     # Mock mode can work without keys
     if args.mock:
