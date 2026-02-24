@@ -1,5 +1,29 @@
 # /last30days v2.1
 
+> **Fork of [mvanhorn/last30days-skill](https://github.com/mvanhorn/last30days-skill)** with Brave Search backend for Reddit (no OpenAI Responses API needed).
+
+## Fork Changes
+
+This fork replaces the OpenAI Responses API for Reddit search with a [Brave Search](https://brave.com/search/api/) backend. Everything else is unchanged.
+
+**What's different:**
+
+- **Reddit via Brave** (new default) - sends `site:reddit.com` queries to Brave's Web Search API instead of OpenAI's Responses API. No LLM needed for Reddit search. Brave ranking + the built-in `score.py` scoring handles result quality. Free tier: 2,000 queries/month.
+- **X search unchanged** - still uses the vendored bird-search GraphQL client. Cookie auth via browser session, or set `AUTH_TOKEN`/`CT0` env vars manually.
+- **Auto mode** - set `REDDIT_BACKEND=auto` (the default) and the skill picks the right backend based on which keys are present. If `BRAVE_API_KEY` is set, Brave mode activates. If only `OPENAI_API_KEY` is present, it falls back to the original OpenAI path.
+- **All original features preserved** - watchlists, briefings, YouTube transcripts, web search, `--days=N`, `--quick`/`--deep`, everything.
+
+**Config:**
+
+```bash
+REDDIT_BACKEND=auto    # auto (default) | openai | brave
+```
+
+- `auto` - uses Brave if `BRAVE_API_KEY` is set, OpenAI if only `OPENAI_API_KEY` is set
+- `brave` - force Brave mode (requires `BRAVE_API_KEY`)
+- `openai` - force original mode (requires `OPENAI_API_KEY` with Responses API access)
+
+
 **The AI world reinvents itself every month. This skill keeps you current.** /last30days researches your topic across Reddit, X, YouTube, and the web from the last 30 days, finds what the community is actually upvoting, sharing, and saying on camera, and writes you a prompt that works today, not six months ago. Whether it's Seedance 2.0 access, Suno music prompts, or the latest Nano Banana Pro techniques, you'll prompt like someone who's been paying attention.
 
 **New in V2.1  - three headline features:**
@@ -24,10 +48,18 @@ git clone https://github.com/mvanhorn/last30days-skill.git ~/.claude/skills/last
 
 # Add your API keys
 mkdir -p ~/.config/last30days
+# Option A: Brave mode (recommended -- no OpenAI needed for Reddit)
 cat > ~/.config/last30days/.env << 'EOF'
-OPENAI_API_KEY=sk-...
-XAI_API_KEY=xai-...       # optional  - cookie auth is default for X search
+BRAVE_API_KEY=...         # Free tier: 2,000 queries/month at brave.com
+# AUTH_TOKEN=...          # Optional: X search cookie (from browser DevTools)
+# CT0=...                 # Optional: X search cookie (from browser DevTools)
 EOF
+
+# Option B: Original OpenAI mode (requires OpenAI API with Responses API access)
+# cat > ~/.config/last30days/.env << 'EOF'
+# OPENAI_API_KEY=sk-...
+# XAI_API_KEY=xai-...    # Optional X search fallback
+# EOF
 chmod 600 ~/.config/last30days/.env
 ```
 
@@ -851,20 +883,22 @@ This example shows /last30days discovering **emerging developer workflows** - re
 
 ## Requirements
 
-- **OpenAI API key** - For Reddit research (uses web search via Responses API)
+- **Brave API key** - For Reddit research in Brave mode (recommended). Free tier: 2,000 queries/month. Get one at [brave.com/search/api](https://brave.com/search/api/).
+- **OpenAI API key** - Required for OpenAI Reddit mode only. Needs Responses API access (`web_search` tool). Not needed if you're using Brave mode.
 - **Node.js 22+** - For X search (bundled Twitter GraphQL client)
 - **X session** - Be logged into x.com in your browser, or set `AUTH_TOKEN`/`CT0` env vars
 - **xAI API key** (optional fallback) - If the bundled search can't authenticate, falls back to xAI's Grok API
 - **yt-dlp** (optional) - For YouTube search + transcript extraction. Install via `brew install yt-dlp` or `pip install yt-dlp`. When present, automatically searches YouTube and extracts video transcripts as a 4th source.
 
-At least one API key is required. X search works automatically if you're logged into x.com in your browser. YouTube search activates automatically when yt-dlp is in your PATH.
+At least one of `BRAVE_API_KEY` or `OPENAI_API_KEY` is required for Reddit search. X search works automatically if you're logged into x.com in your browser. YouTube search activates automatically when yt-dlp is in your PATH.
 
 ## How It Works
 
 ### Two-Phase Search Architecture
 
 **Phase 1: Broad discovery**
-- OpenAI Responses API with `web_search` tool scoped to reddit.com
+- Reddit search via **Brave mode** (default): `site:reddit.com` queries sent to Brave Web Search API. No LLM needed, Brave ranking + score.py handles result quality.
+- Reddit search via **OpenAI mode** (original): OpenAI Responses API with `web_search` tool scoped to reddit.com. Requires `OPENAI_API_KEY` with Responses API access.
 - Vendored Twitter GraphQL search (or xAI API fallback) for X search
 - YouTube search + transcript extraction via yt-dlp (when installed)
 - WebSearch for blogs, news, docs, tutorials
@@ -949,15 +983,13 @@ Thanks to the contributors who helped shape V2:
 
 | Destination | Data Sent | API Key Required |
 |------------|-----------|-----------------|
-| `api.openai.com` | Search query (topic string) | OPENAI_API_KEY |
+| `api.search.brave.com` | Search query (Reddit search in Brave mode; also `--include-web`) | BRAVE_API_KEY |
+| `api.openai.com` | Search query (Reddit search in OpenAI mode only) | OPENAI_API_KEY |
 | `reddit.com` | Thread URLs for enrichment | None (public JSON) |
 | Twitter GraphQL / `api.x.ai` | Search query | Browser cookies or XAI_API_KEY |
 | `youtube.com` (via yt-dlp) | Search query | None (public search) |
-| `api.search.brave.com` | Search query (optional) | BRAVE_API_KEY |
 | `api.parallel.ai` | Search query (optional) | PARALLEL_API_KEY |
 | `openrouter.ai` | Search query (optional) | OPENROUTER_API_KEY |
-
-Your research topic is included in all outbound API requests. If you research sensitive topics, be aware that query strings are transmitted to the API providers listed above.
 
 ### Data stored locally
 
