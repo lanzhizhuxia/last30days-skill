@@ -111,6 +111,7 @@ from lib import (
     ui,
     websearch,
     xai_x,
+    youtube_scrape,
     youtube_yt,
 )
 
@@ -304,28 +305,32 @@ def _search_youtube(
     from_date: str,
     to_date: str,
     depth: str,
+    backend: str = 'ytdlp',
 ) -> tuple:
-    """Search YouTube via yt-dlp (runs in thread).
+    """Search YouTube via configured backend (runs in thread).
 
+    Args:
+        backend: 'scrape' or 'ytdlp'
     Returns:
         Tuple of (youtube_items, youtube_error)
     """
     youtube_error = None
-
     try:
-        response = youtube_yt.search_and_transcribe(
-            topic, from_date, to_date, depth=depth,
-        )
+        if backend == 'scrape':
+            response = youtube_scrape.search_and_transcribe(
+                topic, from_date, to_date, depth=depth,
+            )
+            youtube_items = youtube_scrape.parse_youtube_response(response)
+        else:
+            response = youtube_yt.search_and_transcribe(
+                topic, from_date, to_date, depth=depth,
+            )
+            youtube_items = youtube_yt.parse_youtube_response(response)
     except Exception as e:
         return [], f"{type(e).__name__}: {e}"
-
-    youtube_items = youtube_yt.parse_youtube_response(response)
-
     if response.get("error"):
         youtube_error = response["error"]
-
     return youtube_items, youtube_error
-
 
 def _search_web(
     topic: str,
@@ -520,6 +525,7 @@ def run_research(
     progress: ui.ProgressDisplay = None,
     x_source: str = "xai",
     run_youtube: bool = False,
+    youtube_backend: str = 'ytdlp',
     timeouts: dict = None,
 ) -> tuple:
     """Run the research pipeline.
@@ -580,7 +586,7 @@ def run_research(
             if progress:
                 progress.start_youtube()
             try:
-                youtube_items, youtube_error = _search_youtube(topic, from_date, to_date, depth)
+                youtube_items, youtube_error = _search_youtube(topic, from_date, to_date, depth, backend=youtube_backend)
                 if youtube_error and progress:
                     progress.show_error(f"YouTube error: {youtube_error}")
             except Exception as e:
@@ -624,7 +630,7 @@ def run_research(
             if progress:
                 progress.start_youtube()
             youtube_future = executor.submit(
-                _search_youtube, topic, from_date, to_date, depth
+                _search_youtube, topic, from_date, to_date, depth, youtube_backend
             )
 
         if web_backend:
@@ -897,8 +903,9 @@ def main():
     x_source_status = env.get_x_source_status(config)
     x_source = x_source_status["source"]  # 'bird', 'xai', or None
 
-    # Auto-detect yt-dlp for YouTube search
-    has_ytdlp = env.is_ytdlp_available()
+    # Auto-detect YouTube backend
+    youtube_backend = env.get_youtube_backend(config)
+    has_youtube = youtube_backend != 'none'
 
     # --diagnose: show source availability and exit
     if args.diagnose:
@@ -911,7 +918,8 @@ def main():
             "bird_installed": x_source_status["bird_installed"],
             "bird_authenticated": x_source_status["bird_authenticated"],
             "bird_username": x_source_status.get("bird_username"),
-            "youtube": has_ytdlp,
+            "youtube": has_youtube,
+            "youtube_backend": youtube_backend,
             "web_search_backend": web_source,
             "parallel_ai": bool(config.get("PARALLEL_API_KEY")),
             "brave": bool(config.get("BRAVE_API_KEY")),
@@ -938,7 +946,8 @@ def main():
         "bird_installed": x_source_status["bird_installed"],
         "bird_authenticated": x_source_status["bird_authenticated"],
         "bird_username": x_source_status.get("bird_username"),
-        "youtube": has_ytdlp,
+        "youtube": has_youtube,
+        "youtube_backend": youtube_backend,
         "web_search_backend": web_source,
     }
     ui.show_diagnostic_banner(diag)
@@ -1029,7 +1038,8 @@ def main():
         args.mock,
         progress,
         x_source=x_source or "xai",
-        run_youtube=has_ytdlp,
+        run_youtube=has_youtube,
+        youtube_backend=youtube_backend,
         timeouts=timeouts,
     )
 
@@ -1118,8 +1128,8 @@ def main():
             source_info["x_skip_reason"] = "Bird installed but not authenticated — log into x.com in browser"
         else:
             source_info["x_skip_reason"] = "No Bird CLI or XAI_API_KEY (Node.js 22+ needed for Bird)"
-    if not has_ytdlp:
-        source_info["youtube_skip_reason"] = "yt-dlp not installed — fix: brew install yt-dlp"
+    if not has_youtube:
+        source_info["youtube_skip_reason"] = "scrapetube/yt-dlp not installed — fix: pip install scrapetube youtube-transcript-api"
     if not web_source:
         source_info["web_skip_reason"] = "assistant will use WebSearch (add BRAVE_API_KEY for native search)"
 

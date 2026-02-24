@@ -64,6 +64,7 @@ def get_config() -> Dict[str, Any]:
         ('OPENAI_API_BASE', None),       # For M2 Codex API proxy
         ('AUTH_TOKEN', None),             # X search cookie auth fallback
         ('CT0', None),                   # X search cookie auth fallback
+        ('YOUTUBE_BACKEND', 'auto'),   # auto / ytdlp / scrape
     ]
 
     config = {}
@@ -250,6 +251,38 @@ def is_ytdlp_available() -> bool:
     """Check if yt-dlp is installed for YouTube search."""
     from . import youtube_yt
     return youtube_yt.is_ytdlp_installed()
+
+
+def is_scrape_available() -> bool:
+    """Check if scrapetube + youtube-transcript-api are installed for YouTube search."""
+    from . import youtube_scrape
+    return youtube_scrape.is_scrapetube_available()
+
+
+def get_youtube_backend(config: Dict[str, Any]) -> str:
+    """Determine the YouTube search backend to use.
+
+    Args:
+        config: Configuration dict from get_config()
+
+    Returns:
+        'scrape', 'ytdlp', or 'none'
+    """
+    backend = config.get('YOUTUBE_BACKEND', 'auto')
+
+    if backend == 'scrape':
+        return 'scrape' if is_scrape_available() else 'none'
+    elif backend == 'ytdlp':
+        return 'ytdlp' if is_ytdlp_available() else 'none'
+    elif backend == 'auto':
+        # Auto-detect: prefer scrapetube (pure Python, no CLI dependency)
+        if is_scrape_available():
+            return 'scrape'
+        elif is_ytdlp_available():
+            return 'ytdlp'
+        else:
+            return 'none'
+    return 'none'
 
 
 def get_x_source_status(config: Dict[str, Any]) -> Dict[str, Any]:

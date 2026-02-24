@@ -23,6 +23,18 @@ REDDIT_BACKEND=auto    # auto (default) | openai | brave
 - `brave` - force Brave mode (requires `BRAVE_API_KEY`)
 - `openai` - force original mode (requires `OPENAI_API_KEY` with Responses API access)
 
+- **YouTube via scrapetube** (new) - uses `scrapetube` + `youtube-transcript-api` instead of `yt-dlp` for YouTube search and transcript extraction. Pure Python, no binary dependencies, no API keys needed. Set `YOUTUBE_BACKEND=auto` (the default) and the skill picks the right backend: scrapetube if installed, yt-dlp if available, skip if neither.
+
+**YouTube Config:**
+
+```bash
+YOUTUBE_BACKEND=auto   # auto (default) | ytdlp | scrape
+```
+
+- `auto` - uses scrapetube if installed, yt-dlp if available
+- `scrape` - force scrapetube mode (requires `pip install scrapetube youtube-transcript-api`)
+- `ytdlp` - force original mode (requires yt-dlp binary)
+
 
 **The AI world reinvents itself every month. This skill keeps you current.** /last30days researches your topic across Reddit, X, YouTube, and the web from the last 30 days, finds what the community is actually upvoting, sharing, and saying on camera, and writes you a prompt that works today, not six months ago. Whether it's Seedance 2.0 access, Suno music prompts, or the latest Nano Banana Pro techniques, you'll prompt like someone who's been paying attention.
 
@@ -61,6 +73,10 @@ EOF
 # XAI_API_KEY=xai-...    # Optional X search fallback
 # EOF
 chmod 600 ~/.config/last30days/.env
+
+# YouTube search (choose one):
+pip install scrapetube youtube-transcript-api  # Option A: Pure Python (recommended)
+# OR: brew install yt-dlp                     # Option B: Binary dependency
 ```
 
 ### X Search Authentication
@@ -888,9 +904,9 @@ This example shows /last30days discovering **emerging developer workflows** - re
 - **Node.js 22+** - For X search (bundled Twitter GraphQL client)
 - **X session** - Be logged into x.com in your browser, or set `AUTH_TOKEN`/`CT0` env vars
 - **xAI API key** (optional fallback) - If the bundled search can't authenticate, falls back to xAI's Grok API
-- **yt-dlp** (optional) - For YouTube search + transcript extraction. Install via `brew install yt-dlp` or `pip install yt-dlp`. When present, automatically searches YouTube and extracts video transcripts as a 4th source.
+- **YouTube** (optional) - For YouTube search + transcript extraction. Option A (recommended): `pip install scrapetube youtube-transcript-api` (pure Python, no binary). Option B: `brew install yt-dlp`. Set `YOUTUBE_BACKEND=auto` to let the skill pick whichever is available, or force a specific backend with `scrape` or `ytdlp`.
 
-At least one of `BRAVE_API_KEY` or `OPENAI_API_KEY` is required for Reddit search. X search works automatically if you're logged into x.com in your browser. YouTube search activates automatically when yt-dlp is in your PATH.
+At least one of `BRAVE_API_KEY` or `OPENAI_API_KEY` is required for Reddit search. X search works automatically if you're logged into x.com in your browser. YouTube search activates automatically when scrapetube or yt-dlp is available.
 
 ## How It Works
 
